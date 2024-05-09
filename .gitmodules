@@ -1,0 +1,6 @@
+[submodule "amazon-web-scraper-api"]
+	path = amazon-web-scraper-api
+	url = https://github.com/mdccg/amazon-web-scraper-api
+[submodule "amazon-web-scraper-client"]
+	path = amazon-web-scraper-client
+	url = https://github.com/mdccg/amazon-web-scraper-client
