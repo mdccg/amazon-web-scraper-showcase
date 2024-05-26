@@ -1,7 +1,3 @@
-**Aviso: a API e o cliente front-end estão prontos. Estou apenas terminando de escrever este README.**
-
----
-
 # amazon-web-scraper-showcase
 
 ## Sumário
@@ -10,13 +6,14 @@
   - [Sumário](#sumário)
   - [_To-do list_](#to-do-list)
   - [Motivação](#motivação)
-    - [API](#api)
-    - [Cliente front-end](#cliente-front-end)
+    - [`GET /api/scrape`](#get-apiscrape)
+      - [Motivação](#motivação-1)
+      - [Exemplo de URL](#exemplo-de-url)
+      - [Status 200](#status-200)
+      - [Status 500](#status-500)
+      - [Status 503](#status-503)
   - [Pilha de tecnologia](#pilha-de-tecnologia)
   - [Galeria](#galeria)
-  - [Como rodar](#como-rodar)
-    - [Pré-requisitos](#pré-requisitos)
-    - [Passo a passo](#passo-a-passo)
 
 <details>
   <summary>
@@ -40,7 +37,7 @@
   - [X] Alterar os metadados do arquivo `index.html` adicionando OpenGL
   - [X] Explicar a variável de ambiente `BYPASS_SERVER_ERROR_STATUS_CODE` neste arquivo
   - [X] ~~Adicionar uma subseção "_Features_" à subseção "Motivação" para~~ explicar detalhes técnicos como o comportamento dos botões e telas adicionais em casos de erro
-  - [X] Criar três repositórios[<sup>1</sup>](#nota-de-rodape-1) ~~e hospedar a API e o site no Vercel e Firebase, respectivamente~~
+  - [X] Criar três repositórios[<sup>1</sup>](#nota-de-rodape-1) e hospedar a API e o site no Vercel e Firebase, respectivamente
 
   <sup id="nota-de-rodape-1">1</sup> Como o Vercel exige que uma API Express esteja em um único repositório de código configurado via `vercel.json` para o _deploy_, o terceiro repositório será composto apenas de um arquivo `README.md` e dois submódulos que redirecionarão o visitante para os respectivos repositórios.
 
@@ -55,45 +52,115 @@
 
 ## Motivação
 
-Este app é uma ferramenta de consulta a produtos da Amazon extraídos através de _web scraping_. Nos dois repositórios de código adicionados a este repositório como submódulos, não há arquivos com textos motivacionais ou instrucionais; PORTANTO, toda a documentação do app está disponível neste arquivo, como solicitado pelo teste técnico para a vaga de Estágio em Desenvolvimento Full Stack da empresa LongLifeNutri.
+Este app é uma ferramenta de consulta a produtos da Amazon extraídos através de _web scraping_. Nos dois repositórios de código adicionados a este repositório como submódulos, não há arquivos com textos motivacionais ou instrucionais. Portanto, toda a documentação do app está disponível neste arquivo, como solicitado no teste técnico para a vaga de Estágio em Desenvolvimento Full Stack da empresa LongLifeNutri.
 
-### API
+<details open>
+  <summary>
+  
+  ### `GET /api/scrape`
+  </summary>
 
-O objetivo da API é fazer requisições HTTP ao endereço [`https://www.amazon.com.br/s?k=Foo+bar`](https://www.amazon.com.br/s?k=Creatina), em que `s` é a rota de pesquisa (_search_) de produtos e `k` é o parâmetro _query_ que recebe o nome (_keyword_) do produto buscado. Feita a requisição, através da dependência JSDOM, o conteúdo da página HTML carregado é tratado e convertido para um vetor de produtos em que cada produto obedece à seguinte interface:
+  #### Motivação
 
-```typescript
-interface IProduct {
-  title: string;
-  imageURL: string;
-  rating?: number;
-  numberOfReviews?: number;
-}
-```
+  Esta rota usa os módulos [Axios](https://www.npmjs.com/package/axios) e [JSDOM](https://www.npmjs.com/package/jsdom) para fazer uma requisição HTTP à página de pesquisa de produtos; e converter os produtos buscados de elementos HTML para instâncias de produto, respectivamente.
+  
+  O endereço de URL da página de pesquisa de produtos é https://www.amazon.com.br/s?k=Creatina, em que `s` é a rota de pesquisa de produtos (_search_) e `k` é o parâmetro _query_ que recebe a palavra-chave do produto buscado (_keyword_). Feita a requisição, o conteúdo da página é tratado; e os componentes HTML contendo as informações dos produtos são convertidos em um vetor em que cada elemento obedece à interface[<sup>[1]</sup>](https://github.com/mdccg/amazon-web-scraper-api/blob/main/src/interfaces/IProduct.ts) abaixo. Observação: Os atributos `rating` e `numberOfReviews` seguem facultativos pois há produtos que não apresentam a média de avaliações por cinco estrelas e o respectivo número de avaliações.
 
-Os atributos `rating` e `numberOfReviews` seguem facultativos pois há produtos que não apresentam a média de avaliações por cinco estrelas e o respectivo número de avaliações.
+  ```typescript
+  interface IProduct {
+    title: string;
+    imageURL: string;
+    rating?: number;
+    numberOfReviews?: number;
+  }
+  ```
 
-`GET /api/scrape`
+  Como o site da Amazon tem seu próprio detector de _bot_, spam, abuso e coisas do gênero — análogo ao reCAPTCHA da Google — por vezes esta rota retornará o status HTTP de reposta [503](https://http.cat/503) (_Service Unavailable_), indicando que a requisição foi barrada por estar sendo feita a partir de uma API Express ao invés de um navegador. Para contornar este problema em caso de demonstração da interface de usuário, foi criada a variável de ambiente `BYPASS_SERVER_ERROR_STATUS_CODE`.
 
-Exemplo de URL: http://localhost:3001/api/scrape?keyword=Creatina
+  A função desta variável de ambiente booleana é retornar dados falsos — os quais foram coletados em uma das requisições HTTP bem-sucedidas para a palavra-chave "Creatina" — e impedir que esta rota retorne outro status HTTP de resposta além de [200](https://http.cat/200). Caso a variável receba `true`, [o objeto de transferência de dados](https://github.com/mdccg/amazon-web-scraper-api/blob/main/src/data-transports/ScrapeResponse.ts) desta rota informará se os dados são falsos através da propriedade booleana `isFake`:
 
-Descrição:
+  ```typescript
+  type ScrapeResponse = {
+    products: IProduct[];
+    total: number;
+    isFake: boolean;
+  }
+  ``` 
 
-Exemplo de resposta:
+  E a propriedade `isFake` é checada no cliente front-end, o qual informa se os dados são falsos através das seguintes frases:
 
-```json
-{
+  > Foram encontrados 48 resultados para "Creatina".
+  >
+  > Foram encontrados 60 resultados **fictícios** para "Creatina".
 
-}
-```
+  Vale destacar que aproximadamente apenas vinte porcento das requisições feitas durante as fases de desenvolvimento e homologação foram bem-sucedidas, ou seja, **foi necessário refazer a requisição várias vezes**. Além disso, há outras variáveis de ambiente definidas no arquivo de declaração [`environment.d.ts`](https://github.com/mdccg/amazon-web-scraper-api/blob/main/src/declarations/environment.d.ts). Essas variáveis, listadas abaixo, servem para evitar alterações _hard-code_ no código-fonte; caso o domínio, a rota ou o parâmetro _query_ da Amazon sejam modificados pela Amazon.com, Inc.
+
+  - `AMAZON_API_BASE_URL`;
+  - `AMAZON_API_PATH_NAME`;
+  - `AMAZON_API_QUERY_PARAMETER`.
+
+  #### Exemplo de URL
+
+  Exemplo de URL: http://localhost:3001/api/scrape?keyword=Creatina
+
+  #### Status 200
+
+  ```json
+  {
+    "products": [
+      {
+        "title": "Max Titanium Creatina - 300g",
+        "imageURL": "https://m.media-amazon.com/images/I/51fpPqn3VbL._AC_UL320_.jpg"
+      },
+      {
+        "title": "Integralmédica - Creatina 300G Monohidratada 100% Pura Branco",
+        "imageURL": "https://m.media-amazon.com/images/I/61ab639aDML._AC_UL320_.jpg",
+        "rating": 4.7,
+        "numberOfReviews": 31966
+      },
+      /* ... */
+    ],
+    "total": 48,
+    "isFake": false
+  }
+  ```
+
+  #### Status 500
+
+  ```json
+  {
+    "error": "Oops! Parece que algo deu errado temporariamente. Não se preocupe, estamos trabalhando para resolver isso o mais rápido possível"
+  }
+  ```
+
+  #### Status 503
+
+  ```json
+  {
+    "error": "Parece que a Amazon detectou atividade incomum e está temporariamente impedindo o acesso aos resultados da pesquisa. Por favor, espere um momento e tente novamente"
+  }
+  ```
+</details>
+
 
 <!--
-TODO explicar o endpoint
-TODO explicar as variáveis de ambiente
--->
-
 ### Cliente front-end
 
-<!-- TODO escrever -->
+Como solicitado no teste técnico, o cliente front-end...
+-->
+
+<!--
+_Brainstorming_
+
+- Layout simples e sem autenticação de usuário
+- Parágrafo pequeno para falar dos assets
+  * Font Awesome 5
+  * Oxygen (Google Fonts)
+  * Loading icon
+- Responsividade com Flexbox
+  * Espaçamento interno de imagens
+  * Largura máxima para elementos da última fileira
+-->
 
 ## Pilha de tecnologia
 
@@ -114,12 +181,10 @@ Os créditos pelas mídias utilizadas estão disponíveis [aqui](https://github.
 ![Tela de nenhum resultado encontrado](./docs/no-results.png)
 ![Tela de erro interno do servidor](./docs/server-error.png)
 
+<!--
 ## Como rodar
 
 ### Pré-requisitos
 
-<!-- TODO escrever -->
-
 ### Passo a passo
-
-<!-- TODO escrever -->
+-->
